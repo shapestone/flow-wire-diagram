@@ -1,0 +1,25 @@
+# Build output
+bin/
+/wire-fix
+
+# Go
+*.test
+*.out
+/vendor/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# Personal working files
+my-diagrams/
