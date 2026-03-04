@@ -75,6 +75,9 @@ wire-fix -a docs/architecture.md
 
 # Scan for characters with visual width != 1
 wire-fix -w docs/architecture.md
+
+# Show per-diagram repair summary
+wire-fix -verbose docs/architecture.md
 ```
 
 ## Supported Diagram Types
@@ -88,6 +91,11 @@ wire-fix -w docs/architecture.md
 | Trailing text | `│ content │ - annotation` |
 
 Tree diagrams (`├──`, `└──`) are detected and passed through unchanged.
+
+## Known Limitations
+
+- **Strict containment**: When a child box's right column exactly equals the parent box's right column, the nesting check fails and both boxes become roots — the diagram passes through unrepaired. **Fix**: widen the outer box by at least one column so it fully contains the inner box.
+- **Connector snap window**: Free-line connectors (`│` on non-frame lines) are only snapped when they are within ±2 columns of the expected position. Connectors drifted more than 2 columns will not be repaired.
 
 ## Library Usage
 
@@ -124,6 +132,29 @@ for _, block := range blocks {
 | 0 | Success |
 | 1 | `-v` found defects |
 | 2 | File read/write error |
+
+## Troubleshooting
+
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| File unchanged after running `wire-fix` | No defects detected, or diagram uses `+`/`-`/`\|` (ASCII) instead of `┌`/`│` box-drawing chars | Run `-d` to preview; if no diff, run `-v` to see defect count. If using ASCII, omit `-a`. |
+| `-v` exits 1 on a diagram that looks correct | A connector is misaligned by ≤2 columns but the frame is fine | Run `-d` to preview the exact repair |
+| Wide characters reported by `-w` | Emoji or CJK glyphs inside diagram blocks have visual width 2 | Remove wide characters from inside boxes, or annotate them outside |
+
+## CI/CD Integration
+
+GitHub Actions step:
+
+```yaml
+- name: Verify wire diagrams
+  run: wire-fix -v docs/architecture.md
+```
+
+Pre-commit hook one-liner:
+
+```bash
+wire-fix -v "$1" || { echo "Diagram defects found — run wire-fix to repair"; exit 1; }
+```
 
 ## Contributing
 
