@@ -306,7 +306,20 @@ func repairFrameLine(dl domain.DiagramLine) string {
 		for _, r := range dl.Original {
 			w := RuneWidthOf(r)
 			if col > outermost.LeftCol && col < outermost.RightCol && col < len(buf) {
-				if !isStructuralRune(r) && buf[col] == ' ' {
+				// A │ connector that is far from any expected box wall column
+				// should be preserved just like non-structural text (e.g. the
+				// vertical leg of an elbow connector on a bottom-frame line).
+				// │ chars within connectorAlignWindow of a box wall are treated
+				// as shifted walls and must not be preserved here.
+				nearBoxWall := false
+				for _, b := range dl.ActiveBoxes {
+					if absInt(col-b.LeftCol) <= connectorAlignWindow ||
+						absInt(col-b.RightCol) <= connectorAlignWindow {
+						nearBoxWall = true
+						break
+					}
+				}
+				if (!isStructuralRune(r) || (r == '│' && !nearBoxWall)) && buf[col] == ' ' {
 					inInner := false
 					for _, b := range dl.ActiveBoxes {
 						if b != outermost && col >= b.LeftCol && col <= b.RightCol {
@@ -392,19 +405,26 @@ func repairContentLine(dl domain.DiagramLine) string {
 		}
 	} else {
 		if len(pipeCols) >= 2 {
-			// Use expected pipe positions (from box structure) to extract content.
-			// This is correct even when there are extra │ chars outside the box
-			// (e.g. a vertical connector column that runs alongside the box).
-			fullContent := extractBetweenCols(dl.Original, pipeCols[0]+1, pipeCols[len(pipeCols)-1])
+			// Actual │ count differs from expected box-wall count (e.g. extra
+			// connector │ inside the box, or shifted walls).  Map the last two
+			// expected pipe positions to the closest actual pipe positions so we
+			// extract content from the right region, not from the whole span.
 			innerLeft := pipeCols[len(pipeCols)-2]
 			innerRight := pipeCols[len(pipeCols)-1]
 			segWidth := innerRight - innerLeft - 1
-			trimmed := strings.TrimRight(fullContent, " ")
-			padded := []rune(VisualPad(trimmed, segWidth))
-			for j, r := range padded {
-				pos := innerLeft + 1 + j
-				if pos < innerRight && pos < targetWidth {
-					buf[pos] = r
+			if segWidth > 0 {
+				actLeft := closestPipe(actualPipes, innerLeft)
+				actRight := closestPipe(actualPipes, innerRight)
+				if actLeft >= 0 && actRight > actLeft {
+					content := extractBetweenCols(dl.Original, actLeft+1, actRight)
+					content = strings.TrimRight(content, " ")
+					padded := []rune(VisualPad(content, segWidth))
+					for j, r := range padded {
+						pos := innerLeft + 1 + j
+						if pos < innerRight && pos < targetWidth {
+							buf[pos] = r
+						}
+					}
 				}
 			}
 		} else {
@@ -444,6 +464,29 @@ func copyOutsideBoxChars(buf []rune, original string, activeBoxes []*domain.Box)
 		}
 		col += RuneWidthOf(r)
 	}
+}
+
+// closestPipe returns the element of pipes that minimises |pipes[i] - target|.
+// Returns -1 if pipes is empty.
+func closestPipe(pipes []int, target int) int {
+	if len(pipes) == 0 {
+		return -1
+	}
+	best := pipes[0]
+	bestDist := absInt(pipes[0] - target)
+	for _, p := range pipes[1:] {
+		if d := absInt(p - target); d < bestDist {
+			best, bestDist = p, d
+		}
+	}
+	return best
+}
+
+func absInt(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 // findActualPipes returns the visual column positions of all │ chars in a line.

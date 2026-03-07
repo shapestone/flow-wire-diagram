@@ -17,9 +17,9 @@ func readTestdata(t *testing.T, name string) []byte {
 	return data
 }
 
-// TestRepairSimpleBoxFile repairs testdata/simple_box.md and verifies the result.
+// TestRepairSimpleBoxFile repairs testdata/fixtures/simple_box.md and verifies the result.
 func TestRepairSimpleBoxFile(t *testing.T) {
-	input := readTestdata(t, "simple_box.md")
+	input := readTestdata(t, "fixtures/simple_box.md")
 	output, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
 	if err != nil {
 		t.Fatalf("RepairFile: %v", err)
@@ -40,12 +40,12 @@ func TestRepairSimpleBoxFile(t *testing.T) {
 // TestRoundTrip repairs simple_box.md and then verifies it passes cleanly.
 func TestRoundTrip(t *testing.T) {
 	files := []string{
-		"simple_box.md",
-		"nested_box.md",
-		"already_correct.md",
-		"side_by_side.md",
-		"multi_cell.md",
-		"multi_cell_nested.md",
+		"fixtures/simple_box.md",
+		"fixtures/nested_box.md",
+		"fixtures/already_correct.md",
+		"fixtures/side_by_side.md",
+		"fixtures/multi_cell.md",
+		"fixtures/multi_cell_nested.md",
 	}
 	for _, f := range files {
 		t.Run(f, func(t *testing.T) {
@@ -67,7 +67,7 @@ func TestRoundTrip(t *testing.T) {
 
 // TestDiffCorrectFile verifies that an already-correct file produces no diff.
 func TestDiffCorrectFile(t *testing.T) {
-	input := readTestdata(t, "already_correct.md")
+	input := readTestdata(t, "fixtures/already_correct.md")
 	output, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
 	if err != nil {
 		t.Fatalf("RepairFile: %v", err)
@@ -81,10 +81,10 @@ func TestDiffCorrectFile(t *testing.T) {
 // across all diagram types.
 func TestASCIIConversion(t *testing.T) {
 	files := []string{
-		"simple_box.md",
-		"nested_box.md",
-		"multi_cell.md",
-		"multi_cell_nested.md",
+		"fixtures/simple_box.md",
+		"fixtures/nested_box.md",
+		"fixtures/multi_cell.md",
+		"fixtures/multi_cell_nested.md",
 	}
 	for _, f := range files {
 		t.Run(f, func(t *testing.T) {
@@ -134,10 +134,10 @@ func TestCheckWidthDetection(t *testing.T) {
 }
 
 // TestCheckWidthFile verifies that DetectWideChars finds wide characters in
-// testdata/wide_chars.md and that RepairFile does not silently corrupt content
+// testdata/fixtures/wide_chars.md and that RepairFile does not silently corrupt content
 // when wide characters are present.
 func TestCheckWidthFile(t *testing.T) {
-	input := readTestdata(t, "wide_chars.md")
+	input := readTestdata(t, "fixtures/wide_chars.md")
 
 	// DetectWideChars must find the emoji in the diagram block.
 	blocks := wirediagram.ExtractBlocks(string(input))
@@ -264,7 +264,7 @@ func TestPassthroughPreservation(t *testing.T) {
 // repaired, the embedded tree diagram is not detected as a box diagram, and the
 // already-correct diagram is left unchanged.
 func TestMixedFile(t *testing.T) {
-	input := readTestdata(t, "mixed.md")
+	input := readTestdata(t, "fixtures/mixed.md")
 	repaired, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
 	if err != nil {
 		t.Fatalf("RepairFile: %v", err)
@@ -299,7 +299,7 @@ func TestMixedFile(t *testing.T) {
 // the strict containment check fails, both become roots, and content lines with
 // more than one active root box pass through unchanged (no repair attempted).
 func TestSharedBoundaryPassthrough(t *testing.T) {
-	input := readTestdata(t, "shared_boundary.md")
+	input := readTestdata(t, "fixtures/shared_boundary.md")
 	repaired, _, err := wirediagram.RepairFile(input, wirediagram.Options{})
 	if err != nil {
 		t.Fatalf("RepairFile: %v", err)
@@ -342,7 +342,7 @@ func TestRuneWidthOf(t *testing.T) {
 // TestConnectorOffByOne verifies that a free-line │ connector that is 1 column
 // to the right of the expected ┬ position is snapped to the correct column.
 func TestConnectorOffByOne(t *testing.T) {
-	input := readTestdata(t, "connector_offby1.md")
+	input := readTestdata(t, "fixtures/connector_offby1.md")
 	repaired, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
 	if err != nil {
 		t.Fatalf("RepairFile: %v", err)
@@ -371,7 +371,7 @@ func TestConnectorOffByOne(t *testing.T) {
 // TestOuterWallOffByOne verifies that a content line where the outer right wall
 // │ is one column short is detected as a defect and repaired.
 func TestOuterWallOffByOne(t *testing.T) {
-	input := readTestdata(t, "outer_wall_offby1.md")
+	input := readTestdata(t, "fixtures/outer_wall_offby1.md")
 	// VerifyFile should detect the defect.
 	vBefore, err := wirediagram.VerifyFile(input)
 	if err != nil {
@@ -401,7 +401,7 @@ func TestOuterWallOffByOne(t *testing.T) {
 // TestContentTooWide verifies that content lines where the outer right wall │
 // is one or two columns too far right are detected as defects and repaired.
 func TestContentTooWide(t *testing.T) {
-	input := readTestdata(t, "content_too_wide.md")
+	input := readTestdata(t, "fixtures/content_too_wide.md")
 	// VerifyFile should detect the defect.
 	vBefore, err := wirediagram.VerifyFile(input)
 	if err != nil {
@@ -472,7 +472,7 @@ func TestContentTooWideNoSlack(t *testing.T) {
 // space).  RepairFile must widen the box so that all lines share a consistent
 // right wall, no characters are dropped, and the result is idempotent.
 func TestContentTooWideNoSlackFixture(t *testing.T) {
-	input := readTestdata(t, "content_too_wide_no_slack.md")
+	input := readTestdata(t, "fixtures/content_too_wide_no_slack.md")
 
 	// Before repair, VerifyFile must detect defects.
 	vBefore, err := wirediagram.VerifyFile(input)
@@ -519,7 +519,7 @@ func TestContentTooWideNoSlackFixture(t *testing.T) {
 // outer boxes, nested inner boxes, connector lines, and content lines where the
 // outer right wall is one or two columns too far right on many lines.
 func TestWriteFlowDiagram(t *testing.T) {
-	input := readTestdata(t, "write_flow_diagram.md")
+	input := readTestdata(t, "fixtures/write_flow_diagram.md")
 
 	// VerifyFile must detect defects.
 	vBefore, err := wirediagram.VerifyFile(input)
@@ -572,9 +572,63 @@ func TestWriteFlowDiagram(t *testing.T) {
 	}
 }
 
+func TestGolden(t *testing.T) {
+	entries, err := os.ReadDir("testdata/golden")
+	if err != nil {
+		t.Fatalf("cannot read testdata/golden: %v", err)
+	}
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), "_input.md") {
+			continue
+		}
+		name := strings.TrimSuffix(e.Name(), "_input.md")
+		t.Run(name, func(t *testing.T) {
+			input := readTestdata(t, "golden/"+name+"_input.md")
+			want := readTestdata(t, "golden/"+name+"_want.md")
+
+			repaired, _, err := wirediagram.RepairFile(input, wirediagram.Options{})
+			if err != nil {
+				t.Fatalf("RepairFile: %v", err)
+			}
+
+			// 1. byte-for-byte match
+			if string(repaired) != string(want) {
+				tmp, tmpErr := os.CreateTemp("", name+"_got_*.md")
+				tmpPath := "(could not create temp file)"
+				if tmpErr == nil {
+					_ = tmp.Close()
+					_ = os.WriteFile(tmp.Name(), repaired, 0644)
+					tmpPath = tmp.Name()
+				}
+				t.Errorf(
+					"repaired output does not match want.\n"+
+						"  diff testdata/golden/%s_want.md %s\n"+
+						"  # if got is correct: cp %s testdata/golden/%s_want.md",
+					name, tmpPath, tmpPath, name)
+			}
+			// 2. want file itself must be clean
+			vWant, err := wirediagram.VerifyFile(want)
+			if err != nil {
+				t.Fatalf("VerifyFile(want): %v", err)
+			}
+			if vWant.DiagramsRepaired > 0 {
+				t.Errorf("want file has defects: %v", vWant.Warnings)
+			}
+			// 3. idempotency on want
+			repaired2, _, err := wirediagram.RepairFile(want, wirediagram.Options{})
+			if err != nil {
+				t.Fatalf("RepairFile(want): %v", err)
+			}
+			if string(want) != string(repaired2) {
+				t.Error("repair of want file is not idempotent")
+			}
+		})
+	}
+}
+
 // TestTreeDiagramPassthrough verifies tree diagrams pass through unchanged.
 func TestTreeDiagramPassthrough(t *testing.T) {
-	input := readTestdata(t, "tree_diagram.md")
+	input := readTestdata(t, "fixtures/tree_diagram.md")
 	output, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
 	if err != nil {
 		t.Fatalf("RepairFile: %v", err)

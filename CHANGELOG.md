@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-03-07
+
+### Fixed
+- `repairFrameLine`: `│` vertical connector chars on a box frame line are now
+  preserved when they are more than `connectorAlignWindow` (±2 columns) from
+  any expected box wall column. Previously they were silently dropped because
+  `│` is classified as a structural rune (e.g. the downward leg of an elbow
+  connector that starts on the same line as an inner box's bottom frame).
+- `repairContentLine` else branch (actual `│` count ≠ expected box-wall count):
+  content is now extracted by mapping the last two expected pipe positions to
+  the nearest actual pipe positions via `closestPipe()`, instead of extracting
+  the entire line span and cramming it into the last segment. This prevented
+  a misplaced `│` from appearing in the repaired output when an inner box
+  contained a tree connector `│` (increasing the actual pipe count by one).
+
+### Changed
+- `testdata/` reorganised: flat fixture files moved to `testdata/fixtures/`;
+  golden input/want pairs live in `testdata/golden/`
+- `TestGolden` writes the actual repaired bytes to `os.CreateTemp` (OS temp
+  dir) on mismatch instead of `testdata/golden/*_got.md`; the error message
+  prints the `diff` and `cp` commands needed to inspect or promote the output
+
 ## [0.5.3] - 2026-03-07
 
 ### Fixed
@@ -85,7 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wide character detection (`DetectWideChars`, `-w` flag) for emoji and CJK characters
 - ASCII conversion mode (`-a` flag) for terminals that don't render box-drawing Unicode
 
-[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.0...v0.5.1

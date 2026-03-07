@@ -249,7 +249,7 @@ func TestRunASCII(t *testing.T) {
 }
 
 func TestRunCheckWidthWithWide(t *testing.T) {
-	f := testdataPath(t, "wide_chars.md")
+	f := testdataPath(t, "fixtures/wide_chars.md")
 	out := captureStdout(func() {
 		run([]string{"-w", f})
 	})
