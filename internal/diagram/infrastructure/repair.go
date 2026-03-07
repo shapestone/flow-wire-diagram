@@ -113,8 +113,21 @@ func repairFreeLine(original, prevRepaired string) string {
 
 // RepairLines repairs diagram lines based on their classified roles.
 // Returns the repaired lines in order.
+//
+// When a content line's text is wider than the current box frame allows,
+// RepairLines widens the outermost box's RightCol to fit and then
+// retroactively re-renders every line from the box's top frame down to
+// (and including) the current line before continuing.
 func RepairLines(diagLines []domain.DiagramLine, boxes []*domain.Box) ([]string, error) {
 	result := make([]string, len(diagLines))
+
+	// Index all diagram lines so we can look them up by line number when
+	// retroactively re-rendering after a box is widened.
+	byIndex := make(map[int]domain.DiagramLine, len(diagLines))
+	for _, dl := range diagLines {
+		byIndex[dl.Index] = dl
+	}
+
 	for _, dl := range diagLines {
 		switch dl.Role {
 		case domain.RoleFree:
@@ -126,12 +139,84 @@ func RepairLines(diagLines []domain.DiagramLine, boxes []*domain.Box) ([]string,
 		case domain.RoleTopFrame, domain.RoleBottomFrame:
 			result[dl.Index] = repairFrameLine(dl)
 		case domain.RoleContent:
+			// Check whether the outermost box needs to be widened to
+			// accommodate this line's content without truncation.
+			if len(dl.ActiveBoxes) > 0 && countRootBoxes(dl) == 1 {
+				outermost := dl.ActiveBoxes[0]
+				if needed := neededRightCol(dl); needed > outermost.RightCol {
+					outermost.RightCol = needed
+					outermost.Width = needed - outermost.LeftCol + 1
+					// Re-render every line from the box's top frame up to
+					// (not including) the current line with the new width.
+					for i := outermost.TopLine; i < dl.Index; i++ {
+						prev, ok := byIndex[i]
+						if !ok {
+							continue
+						}
+						switch prev.Role {
+						case domain.RoleTopFrame, domain.RoleBottomFrame:
+							result[i] = repairFrameLine(prev)
+						case domain.RoleContent:
+							result[i] = repairContentLine(prev)
+						}
+					}
+				}
+			}
 			result[dl.Index] = repairContentLine(dl)
 		default:
 			result[dl.Index] = dl.Original
 		}
 	}
 	return result, nil
+}
+
+// neededRightCol returns the minimum RightCol required so that every segment
+// of dl's content fits without truncation.  Returns the box's current RightCol
+// when the content already fits or when the pipe count is ambiguous.
+func neededRightCol(dl domain.DiagramLine) int {
+	if len(dl.ActiveBoxes) == 0 || countRootBoxes(dl) != 1 {
+		return dl.ActiveBoxes[0].RightCol
+	}
+	outermost := dl.ActiveBoxes[0]
+
+	pipeSet := make(map[int]bool)
+	for _, b := range dl.ActiveBoxes {
+		pipeSet[b.LeftCol] = true
+		pipeSet[b.RightCol] = true
+	}
+	var pipeCols []int
+	for c := range pipeSet {
+		pipeCols = append(pipeCols, c)
+	}
+	sort.Ints(pipeCols)
+
+	actualPipes := findActualPipes(dl.Original)
+	if len(actualPipes) != len(pipeCols) {
+		return outermost.RightCol
+	}
+
+	needed := outermost.RightCol
+	for seg := 0; seg < len(pipeCols)-1; seg++ {
+		leftActual := actualPipes[seg]
+		rightActual := actualPipes[seg+1]
+		leftTarget := pipeCols[seg]
+		rightTarget := pipeCols[seg+1]
+		if rightTarget != outermost.RightCol {
+			continue // only consider the outermost right wall
+		}
+		segWidth := rightTarget - leftTarget - 1
+		if segWidth <= 0 {
+			continue
+		}
+		content := extractBetweenCols(dl.Original, leftActual+1, rightActual)
+		content = strings.TrimRight(content, " ")
+		if w := StringWidth(content); w > segWidth {
+			if n := leftTarget + w + 1; n > needed {
+				needed = n
+			}
+		}
+	}
+	return needed
 }
 
 // countRootBoxes returns the number of active boxes with no parent.
@@ -268,14 +353,6 @@ func repairContentLine(dl domain.DiagramLine) string {
 
 			content := extractBetweenCols(dl.Original, leftActual+1, rightActual)
 			content = strings.TrimRight(content, " ")
-
-			// If the text content is wider than the target segment we cannot
-			// shrink this line without losing characters. Leave it unchanged so
-			// the diagram-level safety check still passes and other lines that
-			// do have slack can still be repaired.
-			if StringWidth(content) > segWidth {
-				return dl.Original
-			}
 
 			padded := []rune(VisualPad(content, segWidth))
 			for j, r := range padded {

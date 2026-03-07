@@ -466,6 +466,55 @@ func TestContentTooWideNoSlack(t *testing.T) {
 	}
 }
 
+// TestContentTooWideNoSlackFixture verifies the full round-trip for
+// testdata/content_too_wide_no_slack.md: the frame is narrower than the
+// widest content line and the text fills right to the wrong wall (no trailing
+// space).  RepairFile must widen the box so that all lines share a consistent
+// right wall, no characters are dropped, and the result is idempotent.
+func TestContentTooWideNoSlackFixture(t *testing.T) {
+	input := readTestdata(t, "content_too_wide_no_slack.md")
+
+	// Before repair, VerifyFile must detect defects.
+	vBefore, err := wirediagram.VerifyFile(input)
+	if err != nil {
+		t.Fatalf("VerifyFile (before): %v", err)
+	}
+	if vBefore.DiagramsRepaired == 0 {
+		t.Error("expected VerifyFile to detect defects before repair")
+	}
+
+	repaired, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
+	if err != nil {
+		t.Fatalf("RepairFile: %v", err)
+	}
+	if result.DiagramsFound == 0 {
+		t.Fatal("expected at least 1 diagram")
+	}
+
+	// No characters must be lost — the no-slack content must still be present.
+	if !strings.Contains(string(repaired), "abcdefghi") {
+		t.Error("content 'abcdefghi' was dropped from the repaired output")
+	}
+
+	// After repair, verify must find no defects.
+	vAfter, err := wirediagram.VerifyFile(repaired)
+	if err != nil {
+		t.Fatalf("VerifyFile (after): %v", err)
+	}
+	if vAfter.DiagramsRepaired > 0 {
+		t.Errorf("verify found defects after repair: %v", vAfter.Warnings)
+	}
+
+	// Repair must be idempotent.
+	repaired2, _, err := wirediagram.RepairFile(repaired, wirediagram.Options{})
+	if err != nil {
+		t.Fatalf("RepairFile (idempotent): %v", err)
+	}
+	if string(repaired) != string(repaired2) {
+		t.Error("repair of content_too_wide_no_slack.md is not idempotent")
+	}
+}
+
 // TestTreeDiagramPassthrough verifies tree diagrams pass through unchanged.
 func TestTreeDiagramPassthrough(t *testing.T) {
 	input := readTestdata(t, "tree_diagram.md")

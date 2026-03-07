@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-03-07
+
+### Fixed
+- `RepairLines`: when a content line's text fills right up to the wrong right wall (no trailing-space slack), the outermost box's `RightCol` is now widened to fit the content and all lines from the box's top frame down to the current line are retroactively re-rendered with the new width. Previously those lines were left unchanged.
+
+### Changed
+- Removed "content lines too wide with no trailing space" from Known Limitations (the widening strategy now handles it fully)
+
 ## [0.5.1] - 2026-03-06
 
 ### Fixed
@@ -61,7 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wide character detection (`DetectWideChars`, `-w` flag) for emoji and CJK characters
 - ASCII conversion mode (`-a` flag) for terminals that don't render box-drawing Unicode
 
-[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.3.0...v0.4.0

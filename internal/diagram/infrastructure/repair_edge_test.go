@@ -168,13 +168,13 @@ func TestRepairContentLineAdjacentPipes(t *testing.T) {
 
 // TestRepairContentLineTooWideNoSlack verifies that when a content line is
 // wider than the target box and the text fills the segment with no trailing
-// space, repairContentLine returns the original line unchanged rather than
-// silently truncating the last character.
+// space, RepairLines widens the box to fit the content rather than silently
+// truncating the last character.
 func TestRepairContentLineTooWideNoSlack(t *testing.T) {
 	// Box: LeftCol=0, RightCol=10 (width 11). segWidth = 9.
 	// Line: "│ abcdefghi│" — 12 chars wide, │ at col 11 (off by 1).
 	// Content between walls: " abcdefghi" (10 chars, no trailing space).
-	// 10 > segWidth(9) → must return original unchanged.
+	// 10 > segWidth(9) → box must be widened to RightCol=11; result is 12 chars.
 	b := &domain.Box{TopLine: 0, BottomLine: 2, LeftCol: 0, RightCol: 10, Width: 11}
 	original := "│ abcdefghi│"
 	dl := domain.DiagramLine{
@@ -188,8 +188,14 @@ func TestRepairContentLineTooWideNoSlack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RepairLines: %v", err)
 	}
-	if result[0] != original {
-		t.Errorf("content too wide, no slack: got %q, want original %q", result[0], original)
+	// After widening, the line must still contain the full content.
+	if !strings.Contains(result[0], "abcdefghi") {
+		t.Errorf("content too wide, no slack: 'abcdefghi' dropped from %q", result[0])
+	}
+	// The right wall must now be at col 11 (box widened to RightCol=11).
+	runes := []rune(result[0])
+	if len(runes) < 12 || runes[11] != '│' {
+		t.Errorf("content too wide, no slack: expected │ at col 11 in %q", result[0])
 	}
 }
 
