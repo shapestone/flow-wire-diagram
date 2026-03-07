@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-03-07
+
+### Fixed
+- `repairFrameLine`: text annotations placed beside an inner box's top/bottom
+  frame (e.g. `│  ┌──┐   emit('send-message')   │`) were silently dropped
+  because `copyOutsideBoxChars` skipped them (inside the outer box's column
+  range). The diagram-level safety check then aborted repair of the entire
+  block. Fixed by copying non-structural text that is inside the outermost box
+  but outside every inner box column range.
+
+### Added
+- `testdata/write_flow_diagram.md` — complex real-world fixture with two outer
+  boxes, nested inner boxes, connector lines, and text labels on inner frame
+  lines; all defects (outer right wall too wide) must be fully repaired
+- `TestWriteFlowDiagram` — end-to-end test covering the above fixture
+
 ## [0.5.2] - 2026-03-07
 
 ### Fixed
@@ -69,7 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wide character detection (`DetectWideChars`, `-w` flag) for emoji and CJK characters
 - ASCII conversion mode (`-a` flag) for terminals that don't render box-drawing Unicode
 
-[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.4.0...v0.5.0

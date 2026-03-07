@@ -295,6 +295,34 @@ func repairFrameLine(dl domain.DiagramLine) string {
 	// active box column ranges (e.g. a vertical connector alongside the box).
 	copyOutsideBoxChars(buf, dl.Original, dl.ActiveBoxes)
 
+	// Preserve non-structural text that sits inside the outermost box but
+	// outside every inner box's column range.  This covers annotations or
+	// labels placed beside an inner box's top/bottom frame on the same line
+	// (e.g. "│  ┌──┐   some label   │").  copyOutsideBoxChars skips these
+	// because they are inside the outermost box; without this step the text
+	// would be lost and the safety check would abort the repair.
+	if len(dl.ActiveBoxes) > 1 {
+		col := 0
+		for _, r := range dl.Original {
+			w := RuneWidthOf(r)
+			if col > outermost.LeftCol && col < outermost.RightCol && col < len(buf) {
+				if !isStructuralRune(r) && buf[col] == ' ' {
+					inInner := false
+					for _, b := range dl.ActiveBoxes {
+						if b != outermost && col >= b.LeftCol && col <= b.RightCol {
+							inInner = true
+							break
+						}
+					}
+					if !inInner {
+						buf[col] = r
+					}
+				}
+			}
+			col += w
+		}
+	}
+
 	result := string(buf)
 	if dl.TrailingText != "" {
 		result += dl.TrailingText
