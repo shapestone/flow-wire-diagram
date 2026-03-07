@@ -339,6 +339,65 @@ func TestRuneWidthOf(t *testing.T) {
 	}
 }
 
+// TestConnectorOffByOne verifies that a free-line │ connector that is 1 column
+// to the right of the expected ┬ position is snapped to the correct column.
+func TestConnectorOffByOne(t *testing.T) {
+	input := readTestdata(t, "connector_offby1.md")
+	repaired, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
+	if err != nil {
+		t.Fatalf("RepairFile: %v", err)
+	}
+	if result.DiagramsFound == 0 {
+		t.Fatal("expected at least 1 diagram")
+	}
+	// After repair, verify should find no defects.
+	vResult, err := wirediagram.VerifyFile(repaired)
+	if err != nil {
+		t.Fatalf("VerifyFile: %v", err)
+	}
+	if vResult.DiagramsRepaired > 0 {
+		t.Errorf("verify found defects after repair: %v", vResult.Warnings)
+	}
+	// Repair must be idempotent.
+	repaired2, _, err := wirediagram.RepairFile(repaired, wirediagram.Options{})
+	if err != nil {
+		t.Fatalf("RepairFile (idempotent): %v", err)
+	}
+	if string(repaired) != string(repaired2) {
+		t.Error("repair of connector_offby1.md is not idempotent")
+	}
+}
+
+// TestOuterWallOffByOne verifies that a content line where the outer right wall
+// │ is one column short is detected as a defect and repaired.
+func TestOuterWallOffByOne(t *testing.T) {
+	input := readTestdata(t, "outer_wall_offby1.md")
+	// VerifyFile should detect the defect.
+	vBefore, err := wirediagram.VerifyFile(input)
+	if err != nil {
+		t.Fatalf("VerifyFile (before): %v", err)
+	}
+	if vBefore.DiagramsRepaired == 0 {
+		t.Error("expected VerifyFile to detect defects in outer_wall_offby1.md before repair")
+	}
+	// RepairFile should fix it.
+	repaired, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
+	if err != nil {
+		t.Fatalf("RepairFile: %v", err)
+	}
+	if result.DiagramsFound == 0 {
+		t.Fatal("expected at least 1 diagram")
+	}
+	// After repair, no defects should remain.
+	vAfter, err := wirediagram.VerifyFile(repaired)
+	if err != nil {
+		t.Fatalf("VerifyFile (after): %v", err)
+	}
+	if vAfter.DiagramsRepaired > 0 {
+		t.Errorf("verify found defects after repair: %v", vAfter.Warnings)
+	}
+}
+
 // TestTreeDiagramPassthrough verifies tree diagrams pass through unchanged.
 func TestTreeDiagramPassthrough(t *testing.T) {
 	input := readTestdata(t, "tree_diagram.md")

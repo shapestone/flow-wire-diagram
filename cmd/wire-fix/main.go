@@ -15,6 +15,17 @@ import (
 // version is set at build time via -ldflags "-X main.version=<tag>".
 var version = "dev"
 
+// skipDirs is the set of directory names to skip during recursive walks.
+var skipDirs = map[string]bool{
+	"node_modules": true,
+	".git":         true,
+	"vendor":       true,
+	".cache":       true,
+	"dist":         true,
+	".next":        true,
+	".nuxt":        true,
+}
+
 // run executes the wire-fix logic and returns an exit code.
 // Separating it from main() makes the logic directly testable.
 func run(argv []string) int {
@@ -200,7 +211,13 @@ func runScan(dir string, verbose bool) int {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+		if d.IsDir() {
+			if skipDirs[d.Name()] {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
 			return nil
 		}
 		input, readErr := os.ReadFile(path)
@@ -292,7 +309,13 @@ func runFix(dir string, verbose bool) int {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+		if d.IsDir() {
+			if skipDirs[d.Name()] {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
 			return nil
 		}
 		input, readErr := os.ReadFile(path)

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-06
+
+### Added
+- `--scan` and `--fix` now skip common non-content directories: `node_modules`, `.git`, `vendor`, `.cache`, `dist`, `.next`, `.nuxt`
+- Test fixtures: `connector_offby1.md` (free-line connector off by 1 col), `outer_wall_offby1.md` (outer right wall short by 1 col)
+
 ## [0.3.0] - 2026-03-06
 
 ### Added
@@ -40,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wide character detection (`DetectWideChars`, `-w` flag) for emoji and CJK characters
 - ASCII conversion mode (`-a` flag) for terminals that don't render box-drawing Unicode
 
-[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/shapestone/flow-wire-diagram/releases/tag/v0.1.0

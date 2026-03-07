@@ -537,3 +537,56 @@ func TestRunFixSummaryLineAlwaysPresent(t *testing.T) {
 		t.Errorf("fix: expected summary line, got: %q", out)
 	}
 }
+
+// ── skip-dirs tests ───────────────────────────────────────────────────────────
+
+func TestRunScanSkipsNodeModules(t *testing.T) {
+	dir := t.TempDir()
+	nm := filepath.Join(dir, "node_modules")
+	if err := os.MkdirAll(nm, 0o755); err != nil {
+		t.Fatalf("mkdir node_modules: %v", err)
+	}
+	// Place a broken diagram inside node_modules — it must not be reported.
+	writeTempMDInDir(t, nm, "broken.md", brokenMD)
+	// Place a clean diagram at the root — it must be found.
+	writeTempMDInDir(t, dir, "good.md", correctMD)
+
+	got := run([]string{"--scan", dir})
+	if got != 0 {
+		t.Errorf("scan with node_modules: exit %d, want 0 (node_modules should be skipped)", got)
+	}
+}
+
+func TestRunScanSkipsGitDir(t *testing.T) {
+	dir := t.TempDir()
+	git := filepath.Join(dir, ".git")
+	if err := os.MkdirAll(git, 0o755); err != nil {
+		t.Fatalf("mkdir .git: %v", err)
+	}
+	writeTempMDInDir(t, git, "broken.md", brokenMD)
+	writeTempMDInDir(t, dir, "good.md", correctMD)
+
+	got := run([]string{"--scan", dir})
+	if got != 0 {
+		t.Errorf("scan with .git: exit %d, want 0 (.git should be skipped)", got)
+	}
+}
+
+func TestRunFixSkipsNodeModules(t *testing.T) {
+	dir := t.TempDir()
+	nm := filepath.Join(dir, "node_modules")
+	if err := os.MkdirAll(nm, 0o755); err != nil {
+		t.Fatalf("mkdir node_modules: %v", err)
+	}
+	path := writeTempMDInDir(t, nm, "broken.md", brokenMD)
+	original, _ := os.ReadFile(path)
+
+	captureStdout(func() {
+		run([]string{"--fix", dir})
+	})
+
+	after, _ := os.ReadFile(path)
+	if string(original) != string(after) {
+		t.Error("--fix modified a file inside node_modules; node_modules should be skipped")
+	}
+}
