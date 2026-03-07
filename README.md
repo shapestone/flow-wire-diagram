@@ -105,6 +105,7 @@ Tree diagrams (`├──`, `└──`) are detected and passed through unchang
 
 - **Strict containment**: When a child box's right column exactly equals the parent box's right column, the nesting check fails and both boxes become roots — the diagram passes through unrepaired. **Fix**: widen the outer box by at least one column so it fully contains the inner box.
 - **Connector snap window**: Free-line connectors (`│` on non-frame lines) are only snapped when they are within ±2 columns of the expected position. Connectors drifted more than 2 columns will not be repaired.
+- **Content lines too wide with no trailing space**: If a content line's text fills right up to the wrong right wall (no trailing space before `│`), the line cannot be shrunk without losing a character. That specific line is left unchanged. Lines with at least one trailing space before the wrong wall are still repaired.
 
 ## Library Usage
 

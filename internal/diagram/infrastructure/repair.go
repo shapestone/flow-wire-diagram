@@ -269,6 +269,14 @@ func repairContentLine(dl domain.DiagramLine) string {
 			content := extractBetweenCols(dl.Original, leftActual+1, rightActual)
 			content = strings.TrimRight(content, " ")
 
+			// If the text content is wider than the target segment we cannot
+			// shrink this line without losing characters. Leave it unchanged so
+			// the diagram-level safety check still passes and other lines that
+			// do have slack can still be repaired.
+			if StringWidth(content) > segWidth {
+				return dl.Original
+			}
+
 			padded := []rune(VisualPad(content, segWidth))
 			for j, r := range padded {
 				pos := leftTarget + 1 + j

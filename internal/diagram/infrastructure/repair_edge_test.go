@@ -166,6 +166,33 @@ func TestRepairContentLineAdjacentPipes(t *testing.T) {
 	_ = result[0] // just verify no panic
 }
 
+// TestRepairContentLineTooWideNoSlack verifies that when a content line is
+// wider than the target box and the text fills the segment with no trailing
+// space, repairContentLine returns the original line unchanged rather than
+// silently truncating the last character.
+func TestRepairContentLineTooWideNoSlack(t *testing.T) {
+	// Box: LeftCol=0, RightCol=10 (width 11). segWidth = 9.
+	// Line: "│ abcdefghi│" — 12 chars wide, │ at col 11 (off by 1).
+	// Content between walls: " abcdefghi" (10 chars, no trailing space).
+	// 10 > segWidth(9) → must return original unchanged.
+	b := &domain.Box{TopLine: 0, BottomLine: 2, LeftCol: 0, RightCol: 10, Width: 11}
+	original := "│ abcdefghi│"
+	dl := domain.DiagramLine{
+		Index:       0,
+		Original:    original,
+		Role:        domain.RoleContent,
+		ActiveBoxes: []*domain.Box{b},
+		TargetWidth: 11,
+	}
+	result, err := RepairLines([]domain.DiagramLine{dl}, nil)
+	if err != nil {
+		t.Fatalf("RepairLines: %v", err)
+	}
+	if result[0] != original {
+		t.Errorf("content too wide, no slack: got %q, want original %q", result[0], original)
+	}
+}
+
 func TestRepairContentLineDegenerateBox(t *testing.T) {
 	// A degenerate box where LeftCol == RightCol produces only 1 unique pipe column.
 	// When actualPipes count != pipeCols count and pipeCols < 2, returns dl.Original.

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-03-06
+
+### Fixed
+- `repairContentLine`: when a content line is wider than the target box and the text fills the segment with no trailing space, the line is now left unchanged instead of silently truncating the last character. Lines that do have trailing-space slack are still repaired normally.
+
+### Added
+- `TestRepairContentLineTooWideNoSlack`: unit test that exercises the no-trailing-space edge case
+- `TestContentTooWideNoSlack`: integration test confirming no characters are dropped from the repaired output
+
 ## [0.5.0] - 2026-03-06
 
 ### Added
@@ -52,7 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wide character detection (`DetectWideChars`, `-w` flag) for emoji and CJK characters
 - ASCII conversion mode (`-a` flag) for terminals that don't render box-drawing Unicode
 
-[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.2.0...v0.3.0

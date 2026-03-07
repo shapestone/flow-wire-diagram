@@ -436,6 +436,36 @@ func TestContentTooWide(t *testing.T) {
 	}
 }
 
+// TestContentTooWideNoSlack verifies that when a content line is too wide and
+// the text fills the segment with no trailing space, the line is left unchanged
+// (not silently truncated), while other lines in the same diagram that do have
+// trailing-space slack are still correctly repaired.
+func TestContentTooWideNoSlack(t *testing.T) {
+	// Box: 11 chars wide (RightCol=10, segWidth=9).
+	// Line A: off by 1, has trailing space slack → should be repaired.
+	// Line B: off by 1, no trailing space (text fills to wrong wall) → unchanged.
+	const diagram = "```ascii\n" +
+		"┌─────────┐\n" + // frame: RightCol=10
+		"│ abcde   │ \n" + // off by 1, trailing space → repairable
+		"│ abcdefghi│\n" + // off by 1, no slack → left unchanged
+		"└─────────┘\n" +
+		"```\n"
+
+	input := []byte("# Test\n\n" + diagram)
+	repaired, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
+	if err != nil {
+		t.Fatalf("RepairFile: %v", err)
+	}
+	if result.DiagramsFound == 0 {
+		t.Fatal("expected at least 1 diagram")
+	}
+
+	// The no-slack line must still be present in the output (chars not dropped).
+	if !strings.Contains(string(repaired), "abcdefghi") {
+		t.Error("content 'abcdefghi' was dropped from the repaired output")
+	}
+}
+
 // TestTreeDiagramPassthrough verifies tree diagrams pass through unchanged.
 func TestTreeDiagramPassthrough(t *testing.T) {
 	input := readTestdata(t, "tree_diagram.md")
