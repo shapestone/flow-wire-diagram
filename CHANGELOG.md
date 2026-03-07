@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-06
+
+### Added
+- `--fix <dir>` flag: recursively scan a directory for `.md` files and repair diagram defects in-place; reports `FIXED`, `PASS`, or `SKIP` per file
+
 ## [0.2.0] - 2026-03-06
 
 ### Added
@@ -35,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wide character detection (`DetectWideChars`, `-w` flag) for emoji and CJK characters
 - ASCII conversion mode (`-a` flag) for terminals that don't render box-drawing Unicode
 
-[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/shapestone/flow-wire-diagram/releases/tag/v0.1.0
