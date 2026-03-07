@@ -398,6 +398,44 @@ func TestOuterWallOffByOne(t *testing.T) {
 	}
 }
 
+// TestContentTooWide verifies that content lines where the outer right wall │
+// is one or two columns too far right are detected as defects and repaired.
+func TestContentTooWide(t *testing.T) {
+	input := readTestdata(t, "content_too_wide.md")
+	// VerifyFile should detect the defect.
+	vBefore, err := wirediagram.VerifyFile(input)
+	if err != nil {
+		t.Fatalf("VerifyFile (before): %v", err)
+	}
+	if vBefore.DiagramsRepaired == 0 {
+		t.Error("expected VerifyFile to detect defects in content_too_wide.md before repair")
+	}
+	// RepairFile should fix it.
+	repaired, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
+	if err != nil {
+		t.Fatalf("RepairFile: %v", err)
+	}
+	if result.DiagramsFound == 0 {
+		t.Fatal("expected at least 1 diagram")
+	}
+	// After repair, no defects should remain.
+	vAfter, err := wirediagram.VerifyFile(repaired)
+	if err != nil {
+		t.Fatalf("VerifyFile (after): %v", err)
+	}
+	if vAfter.DiagramsRepaired > 0 {
+		t.Errorf("verify found defects after repair: %v", vAfter.Warnings)
+	}
+	// Repair must be idempotent.
+	repaired2, _, err := wirediagram.RepairFile(repaired, wirediagram.Options{})
+	if err != nil {
+		t.Fatalf("RepairFile (idempotent): %v", err)
+	}
+	if string(repaired) != string(repaired2) {
+		t.Error("repair of content_too_wide.md is not idempotent")
+	}
+}
+
 // TestTreeDiagramPassthrough verifies tree diagrams pass through unchanged.
 func TestTreeDiagramPassthrough(t *testing.T) {
 	input := readTestdata(t, "tree_diagram.md")
