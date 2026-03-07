@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-06
+
+### Added
+- Test fixture: `content_too_wide.md` — box where content lines have the outer right wall 1 or 2 columns too far right
+- `TestContentTooWide`: verifies VerifyFile detects the defect, RepairFile fixes it, and repair is idempotent
+
 ## [0.4.0] - 2026-03-06
 
 ### Added
@@ -46,7 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wide character detection (`DetectWideChars`, `-w` flag) for emoji and CJK characters
 - ASCII conversion mode (`-a` flag) for terminals that don't render box-drawing Unicode
 
-[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/shapestone/flow-wire-diagram/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/shapestone/flow-wire-diagram/compare/v0.1.0...v0.2.0
