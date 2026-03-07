@@ -77,7 +77,13 @@ wire-fix -a docs/architecture.md
 wire-fix -w docs/architecture.md
 
 # Show per-diagram repair summary
-wire-fix -verbose docs/architecture.md
+wire-fix --verbose docs/architecture.md
+
+# Recursively scan a directory and report defects (read-only)
+wire-fix --scan docs/
+
+# Print version
+wire-fix --version
 ```
 
 ## Supported Diagram Types
@@ -130,7 +136,7 @@ for _, block := range blocks {
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | `-v` found defects |
+| 1 | `-v` or `--scan` found defects |
 | 2 | File read/write error |
 
 ## Troubleshooting
@@ -139,6 +145,7 @@ for _, block := range blocks {
 |---------|-------|------------|
 | File unchanged after running `wire-fix` | No defects detected, or diagram uses `+`/`-`/`\|` (ASCII) instead of `┌`/`│` box-drawing chars | Run `-d` to preview; if no diff, run `-v` to see defect count. If using ASCII, omit `-a`. |
 | `-v` exits 1 on a diagram that looks correct | A connector is misaligned by ≤2 columns but the frame is fine | Run `-d` to preview the exact repair |
+| `--scan` reports a file as FAIL | The file has at least one diagram with defects | Run `wire-fix -v <file>` for detail, or `wire-fix <file>` to repair |
 | Wide characters reported by `-w` | Emoji or CJK glyphs inside diagram blocks have visual width 2 | Remove wide characters from inside boxes, or annotate them outside |
 
 ## CI/CD Integration

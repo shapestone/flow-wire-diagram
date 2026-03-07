@@ -109,6 +109,18 @@ func TestPrintDiffMultipleChanges(t *testing.T) {
 
 // ── run() unit tests ─────────────────────────────────────────────────────────
 
+func TestRunVersion(t *testing.T) {
+	out := captureStdout(func() {
+		got := run([]string{"--version"})
+		if got != 0 {
+			t.Errorf("--version: exit %d, want 0", got)
+		}
+	})
+	if strings.TrimSpace(out) == "" {
+		t.Errorf("--version: expected non-empty output, got: %q", out)
+	}
+}
+
 func TestRunNoArgs(t *testing.T) {
 	got := run([]string{})
 	if got != 2 {
@@ -282,5 +294,147 @@ func TestRunWriteError(t *testing.T) {
 	got := run([]string{"-o", outFile, f})
 	if got != 2 {
 		t.Errorf("run write error: exit %d, want 2", got)
+	}
+}
+
+// ── runScan tests ─────────────────────────────────────────────────────────────
+
+// writeTempMDInDir writes a .md file with the given name inside dir.
+func writeTempMDInDir(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+	return path
+}
+
+func TestRunScanNotADirectory(t *testing.T) {
+	f := writeTempMD(t, correctMD)
+	got := run([]string{"-scan", f})
+	if got != 2 {
+		t.Errorf("scan non-dir: exit %d, want 2", got)
+	}
+}
+
+func TestRunScanNonexistentDir(t *testing.T) {
+	got := run([]string{"-scan", "/nonexistent/path/that/does/not/exist"})
+	if got != 2 {
+		t.Errorf("scan nonexistent: exit %d, want 2", got)
+	}
+}
+
+func TestRunScanEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	out := captureStdout(func() {
+		run([]string{"-scan", dir})
+	})
+	if !strings.Contains(out, "Files scanned: 0") {
+		t.Errorf("scan empty dir: expected 'Files scanned: 0', got: %q", out)
+	}
+}
+
+func TestRunScanAllPass(t *testing.T) {
+	dir := t.TempDir()
+	writeTempMDInDir(t, dir, "a.md", correctMD)
+	writeTempMDInDir(t, dir, "b.md", correctMD)
+	got := run([]string{"-scan", dir})
+	if got != 0 {
+		t.Errorf("scan all pass: exit %d, want 0", got)
+	}
+}
+
+func TestRunScanWithDefects(t *testing.T) {
+	dir := t.TempDir()
+	writeTempMDInDir(t, dir, "good.md", correctMD)
+	writeTempMDInDir(t, dir, "bad.md", brokenMD)
+	var out string
+	got := func() int {
+		var c int
+		out = captureStdout(func() { c = run([]string{"-scan", dir}) })
+		return c
+	}()
+	if got != 1 {
+		t.Errorf("scan with defects: exit %d, want 1", got)
+	}
+	if !strings.Contains(out, "FAIL") {
+		t.Errorf("scan with defects: expected FAIL in output, got: %q", out)
+	}
+	if !strings.Contains(out, "PASS: 1") {
+		t.Errorf("scan with defects: expected PASS: 1 in summary, got: %q", out)
+	}
+	if !strings.Contains(out, "FAIL: 1") {
+		t.Errorf("scan with defects: expected FAIL: 1 in summary, got: %q", out)
+	}
+}
+
+func TestRunScanNoMDFiles(t *testing.T) {
+	dir := t.TempDir()
+	// Write a non-md file
+	if err := os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write txt: %v", err)
+	}
+	out := captureStdout(func() {
+		run([]string{"-scan", dir})
+	})
+	if !strings.Contains(out, "Files scanned: 0") {
+		t.Errorf("scan no md: expected 'Files scanned: 0', got: %q", out)
+	}
+}
+
+func TestRunScanVerboseShowsPassAndSkip(t *testing.T) {
+	dir := t.TempDir()
+	writeTempMDInDir(t, dir, "good.md", correctMD)
+	writeTempMDInDir(t, dir, "nodiag.md", "# Just text\n\nNo diagrams here.\n")
+	out := captureStdout(func() {
+		run([]string{"-scan", dir, "--verbose"})
+	})
+	if !strings.Contains(out, "PASS") {
+		t.Errorf("scan verbose: expected PASS in output, got: %q", out)
+	}
+	if !strings.Contains(out, "SKIP") {
+		t.Errorf("scan verbose: expected SKIP in output, got: %q", out)
+	}
+}
+
+func TestRunScanRecursive(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "subdir")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatalf("mkdir sub: %v", err)
+	}
+	writeTempMDInDir(t, dir, "root.md", correctMD)
+	writeTempMDInDir(t, sub, "nested.md", brokenMD)
+	var out string
+	got := func() int {
+		var c int
+		out = captureStdout(func() { c = run([]string{"-scan", dir}) })
+		return c
+	}()
+	if got != 1 {
+		t.Errorf("scan recursive: exit %d, want 1", got)
+	}
+	if !strings.Contains(out, "nested.md") {
+		t.Errorf("scan recursive: expected nested.md in output, got: %q", out)
+	}
+}
+
+func TestRunScanSummaryLineAlwaysPresent(t *testing.T) {
+	dir := t.TempDir()
+	writeTempMDInDir(t, dir, "f.md", correctMD)
+	out := captureStdout(func() {
+		run([]string{"-scan", dir})
+	})
+	if !strings.Contains(out, "Files scanned:") {
+		t.Errorf("scan: expected summary line, got: %q", out)
+	}
+}
+
+func TestRunScanTestdata(t *testing.T) {
+	// Scan the real testdata directory — expect defects (intentional fixtures).
+	dir := filepath.Join("..", "..", "testdata")
+	got := run([]string{"-scan", dir})
+	if got != 1 {
+		t.Errorf("scan testdata: exit %d, want 1 (intentional defects present)", got)
 	}
 }

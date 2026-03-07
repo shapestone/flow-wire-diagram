@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	wirediagram "github.com/shapestone/flow-wire-diagram"
 )
+
+// version is set at build time via -ldflags "-X main.version=<tag>".
+var version = "dev"
 
 // run executes the wire-fix logic and returns an exit code.
 // Separating it from main() makes the logic directly testable.
@@ -17,27 +22,45 @@ func run(argv []string) int {
 	fs.SetOutput(os.Stderr)
 
 	var (
-		output     = fs.String("o", "", "write to a different output file (default: in-place)")
-		verify     = fs.Bool("v", false, "verify only, don't modify (exit 0=ok, 1=broken)")
-		diff       = fs.Bool("d", false, "show diff of changes")
-		ascii      = fs.Bool("a", false, "convert box-drawing Unicode to safe ASCII equivalents")
-		checkWidth = fs.Bool("w", false, "scan for chars where visual width != 1 (report only)")
-		verbose    = fs.Bool("verbose", false, "show per-line repair details")
+		output      = fs.String("o", "", "write to a different output file (default: in-place)")
+		verify      = fs.Bool("v", false, "verify only, don't modify (exit 0=ok, 1=broken)")
+		diff        = fs.Bool("d", false, "show diff of changes")
+		ascii       = fs.Bool("a", false, "convert box-drawing Unicode to safe ASCII equivalents")
+		checkWidth  = fs.Bool("w", false, "scan for chars where visual width != 1 (report only)")
+		verbose     = fs.Bool("verbose", false, "show per-line repair details")
+		scan        = fs.String("scan", "", "recursively scan `dir` for .md files and report diagram defects (read-only)")
+		showVersion = fs.Bool("version", false, "print version and exit")
 	)
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage: wire-fix [options] <input.md>")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Options:")
-		fs.PrintDefaults()
+		fmt.Fprintln(os.Stderr, "  -a              convert box-drawing Unicode to safe ASCII equivalents")
+		fmt.Fprintln(os.Stderr, "  -d              show diff of changes")
+		fmt.Fprintln(os.Stderr, "  -o string       write to a different output file (default: in-place)")
+		fmt.Fprintln(os.Stderr, "  -v              verify only, don't modify (exit 0=ok, 1=broken)")
+		fmt.Fprintln(os.Stderr, "  -w              scan for chars where visual width != 1 (report only)")
+		fmt.Fprintln(os.Stderr, "  --scan dir      recursively scan dir for .md files and report diagram defects (read-only)")
+		fmt.Fprintln(os.Stderr, "  --verbose       show per-line repair details")
+		fmt.Fprintln(os.Stderr, "  --version       print version and exit")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Exit codes:")
-		fmt.Fprintln(os.Stderr, "  0  Success (or --verify found no issues)")
-		fmt.Fprintln(os.Stderr, "  1  --verify found defects")
+		fmt.Fprintln(os.Stderr, "  0  Success (or -v found no issues)")
+		fmt.Fprintln(os.Stderr, "  1  -v or --scan found defects")
 		fmt.Fprintln(os.Stderr, "  2  Error reading/writing files")
 	}
 
 	if err := fs.Parse(argv); err != nil {
 		return 2
+	}
+
+	if *showVersion {
+		fmt.Println(version)
+		return 0
+	}
+
+	if *scan != "" {
+		return runScan(*scan, *verbose)
 	}
 
 	args := fs.Args()
@@ -137,6 +160,99 @@ func run(argv []string) int {
 	if err := os.WriteFile(outFile, outputBytes, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "error: cannot write %s: %v\n", outFile, err)
 		return 2
+	}
+	return 0
+}
+
+// runScan walks dir recursively, verifies every .md file, and prints a report.
+// It never modifies any file. Returns 0 (all OK), 1 (defects found), 2 (I/O error).
+func runScan(dir string, verbose bool) int {
+	info, err := os.Stat(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: cannot access %s: %v\n", dir, err)
+		return 2
+	}
+	if !info.IsDir() {
+		fmt.Fprintf(os.Stderr, "error: %s is not a directory\n", dir)
+		return 2
+	}
+
+	fmt.Printf("Scanning: %s\n\n", dir)
+
+	type fileResult struct {
+		path     string
+		found    int
+		ok       int
+		defects  int
+		warnings []string
+		readErr  error
+	}
+
+	var results []fileResult
+
+	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+			return nil
+		}
+		input, readErr := os.ReadFile(path)
+		if readErr != nil {
+			results = append(results, fileResult{path: path, readErr: readErr})
+			return nil
+		}
+		result, _ := wirediagram.VerifyFile(input)
+		results = append(results, fileResult{
+			path:     path,
+			found:    result.DiagramsFound,
+			ok:       result.DiagramsOK,
+			defects:  result.DiagramsRepaired,
+			warnings: result.Warnings,
+		})
+		return nil
+	})
+
+	if walkErr != nil {
+		fmt.Fprintf(os.Stderr, "error: scan failed: %v\n", walkErr)
+		return 2
+	}
+
+	var passCount, failCount, skipCount, errCount int
+	hasDefects := false
+
+	for _, r := range results {
+		switch {
+		case r.readErr != nil:
+			errCount++
+			fmt.Printf("ERROR %s (%v)\n", r.path, r.readErr)
+		case r.found == 0:
+			skipCount++
+			if verbose {
+				fmt.Printf("SKIP  %s (no diagrams)\n", r.path)
+			}
+		case r.defects > 0:
+			failCount++
+			hasDefects = true
+			fmt.Printf("FAIL  %s (%d diagram(s), %d with defects)\n", r.path, r.found, r.defects)
+		default:
+			passCount++
+			if verbose {
+				fmt.Printf("PASS  %s (%d diagram(s), %d OK)\n", r.path, r.found, r.ok)
+			}
+		}
+	}
+
+	fmt.Printf("\n%s\n", strings.Repeat("─", 62))
+	fmt.Printf("Files scanned: %d  │  PASS: %d  │  FAIL: %d  │  No diagrams: %d",
+		len(results), passCount, failCount, skipCount)
+	if errCount > 0 {
+		fmt.Printf("  │  Errors: %d", errCount)
+	}
+	fmt.Println()
+
+	if hasDefects || errCount > 0 {
+		return 1
 	}
 	return 0
 }
