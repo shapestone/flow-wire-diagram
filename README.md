@@ -108,20 +108,79 @@ Tree diagrams (`├──`, `└──`) are detected and passed through unchang
 
 ## Library Usage
 
+### Install
+
+```bash
+go get github.com/shapestone/flow-wire-diagram@latest
+```
+
+### Repair a file
+
 ```go
-import wirediagram "github.com/shapestone/flow-wire-diagram"
+import (
+    "fmt"
+    "log"
+    "os"
+    wirediagram "github.com/shapestone/flow-wire-diagram"
+)
 
-// Repair all diagrams in a Markdown file
+input, err := os.ReadFile("docs/architecture.md")
+if err != nil {
+    log.Fatal(err)
+}
+
 output, result, err := wirediagram.RepairFile(input, wirediagram.Options{})
+if err != nil {
+    log.Fatal(err)
+}
 
-// Verify without modifying
+// result.DiagramsFound    — total diagrams parsed from the file
+// result.DiagramsRepaired — diagrams that had alignment defects (now fixed)
+// result.DiagramsOK       — diagrams that were already correct
+// result.Warnings         — human-readable defect descriptions
+
+if result.DiagramsRepaired > 0 {
+    if err := os.WriteFile("docs/architecture.md", output, 0644); err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("repaired %d of %d diagrams\n", result.DiagramsRepaired, result.DiagramsFound)
+}
+```
+
+### Verify without modifying
+
+```go
 result, err := wirediagram.VerifyFile(input)
+if err != nil {
+    log.Fatal(err)
+}
+if result.DiagramsRepaired > 0 {
+    for _, w := range result.Warnings {
+        fmt.Println(w)
+    }
+}
+```
 
-// Detect wide characters (emoji, CJK) inside diagram blocks
-blocks := wirediagram.ExtractBlocks(content)
+### Terminal-safe ASCII output
+
+Pass `Options{ASCII: true}` to convert box-drawing Unicode (`┌│─┘`) to plain ASCII (`+|-`) in the output:
+
+```go
+output, result, err := wirediagram.RepairFile(input, wirediagram.Options{ASCII: true})
+```
+
+### Detect wide characters
+
+```go
+blocks := wirediagram.ExtractBlocks(string(input))
 for _, block := range blocks {
+    if block.Kind != wirediagram.BlockDiagram {
+        continue
+    }
     for _, line := range block.Lines {
-        wide := wirediagram.DetectWideChars(line)
+        if wide := wirediagram.DetectWideChars(line); len(wide) > 0 {
+            fmt.Printf("wide chars in: %q\n", line)
+        }
     }
 }
 ```
