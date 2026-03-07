@@ -29,6 +29,7 @@ func run(argv []string) int {
 		checkWidth  = fs.Bool("w", false, "scan for chars where visual width != 1 (report only)")
 		verbose     = fs.Bool("verbose", false, "show per-line repair details")
 		scan        = fs.String("scan", "", "recursively scan `dir` for .md files and report diagram defects (read-only)")
+		fix         = fs.String("fix", "", "recursively scan `dir` for .md files and repair diagram defects in-place")
 		showVersion = fs.Bool("version", false, "print version and exit")
 	)
 	fs.Usage = func() {
@@ -41,6 +42,7 @@ func run(argv []string) int {
 		fmt.Fprintln(os.Stderr, "  -v              verify only, don't modify (exit 0=ok, 1=broken)")
 		fmt.Fprintln(os.Stderr, "  -w              scan for chars where visual width != 1 (report only)")
 		fmt.Fprintln(os.Stderr, "  --scan dir      recursively scan dir for .md files and report diagram defects (read-only)")
+		fmt.Fprintln(os.Stderr, "  --fix dir       recursively scan dir for .md files and repair diagram defects in-place")
 		fmt.Fprintln(os.Stderr, "  --verbose       show per-line repair details")
 		fmt.Fprintln(os.Stderr, "  --version       print version and exit")
 		fmt.Fprintln(os.Stderr)
@@ -61,6 +63,10 @@ func run(argv []string) int {
 
 	if *scan != "" {
 		return runScan(*scan, *verbose)
+	}
+
+	if *fix != "" {
+		return runFix(*fix, *verbose)
 	}
 
 	args := fs.Args()
@@ -253,6 +259,102 @@ func runScan(dir string, verbose bool) int {
 
 	if hasDefects || errCount > 0 {
 		return 1
+	}
+	return 0
+}
+
+// runFix walks dir recursively, repairs every .md file that has defects,
+// and writes the result back in-place. Returns 0 (all OK), 2 (I/O error).
+func runFix(dir string, verbose bool) int {
+	info, err := os.Stat(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: cannot access %s: %v\n", dir, err)
+		return 2
+	}
+	if !info.IsDir() {
+		fmt.Fprintf(os.Stderr, "error: %s is not a directory\n", dir)
+		return 2
+	}
+
+	fmt.Printf("Fixing: %s\n\n", dir)
+
+	type fileResult struct {
+		path    string
+		fixed   int
+		ok      int
+		found   int
+		readErr error
+	}
+
+	var results []fileResult
+
+	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+			return nil
+		}
+		input, readErr := os.ReadFile(path)
+		if readErr != nil {
+			results = append(results, fileResult{path: path, readErr: readErr})
+			return nil
+		}
+		output, result, _ := wirediagram.RepairFile(input, wirediagram.Options{})
+		if result.DiagramsRepaired > 0 {
+			if writeErr := os.WriteFile(path, output, 0o644); writeErr != nil {
+				fmt.Fprintf(os.Stderr, "error: cannot write %s: %v\n", path, writeErr)
+				results = append(results, fileResult{path: path, readErr: writeErr})
+				return nil
+			}
+		}
+		results = append(results, fileResult{
+			path:  path,
+			found: result.DiagramsFound,
+			fixed: result.DiagramsRepaired,
+			ok:    result.DiagramsOK,
+		})
+		return nil
+	})
+
+	if walkErr != nil {
+		fmt.Fprintf(os.Stderr, "error: fix failed: %v\n", walkErr)
+		return 2
+	}
+
+	var fixedCount, passCount, skipCount, errCount int
+
+	for _, r := range results {
+		switch {
+		case r.readErr != nil:
+			errCount++
+			fmt.Printf("ERROR %s (%v)\n", r.path, r.readErr)
+		case r.found == 0:
+			skipCount++
+			if verbose {
+				fmt.Printf("SKIP  %s (no diagrams)\n", r.path)
+			}
+		case r.fixed > 0:
+			fixedCount++
+			fmt.Printf("FIXED %s (%d diagram(s) repaired)\n", r.path, r.fixed)
+		default:
+			passCount++
+			if verbose {
+				fmt.Printf("PASS  %s (%d diagram(s), %d OK)\n", r.path, r.found, r.ok)
+			}
+		}
+	}
+
+	fmt.Printf("\n%s\n", strings.Repeat("─", 62))
+	fmt.Printf("Files scanned: %d  │  PASS: %d  │  FIXED: %d  │  No diagrams: %d",
+		len(results), passCount, fixedCount, skipCount)
+	if errCount > 0 {
+		fmt.Printf("  │  Errors: %d", errCount)
+	}
+	fmt.Println()
+
+	if errCount > 0 {
+		return 2
 	}
 	return 0
 }
