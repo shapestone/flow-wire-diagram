@@ -1,9 +1,4 @@
-# Write Flow Diagram
-
-A complex real-world diagram with two outer boxes, nested inner boxes, connectors,
-and content lines where the outer right wall is one column too far right on many lines.
-
-```ascii
+```
 ┌─────────────────────────────────────────────────────────┐
 │                     FRONTEND                            │
 │                                                         │

@@ -1,12 +1,16 @@
 package wirediagram_test
 
 import (
+	"flag"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	wirediagram "github.com/shapestone/flow-wire-diagram"
 )
+
+var attemptGolden = flag.Bool("attempt", false, "write algorithm output to _want.md files for review")
 
 func readTestdata(t *testing.T, name string) []byte {
 	t.Helper()
@@ -584,12 +588,22 @@ func TestGolden(t *testing.T) {
 		name := strings.TrimSuffix(e.Name(), "_input.md")
 		t.Run(name, func(t *testing.T) {
 			input := readTestdata(t, "golden/"+name+"_input.md")
-			want := readTestdata(t, "golden/"+name+"_want.md")
 
 			repaired, _, err := wirediagram.RepairFile(input, wirediagram.Options{})
 			if err != nil {
 				t.Fatalf("RepairFile: %v", err)
 			}
+
+			if *attemptGolden {
+				wantPath := filepath.Join("testdata", "golden", name+"_want.md")
+				if err := os.WriteFile(wantPath, repaired, 0644); err != nil {
+					t.Fatalf("update golden: %v", err)
+				}
+				t.Logf("updated %s", wantPath)
+				return
+			}
+
+			want := readTestdata(t, "golden/"+name+"_want.md")
 
 			// 1. byte-for-byte match
 			if string(repaired) != string(want) {

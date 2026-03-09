@@ -167,6 +167,12 @@ func RepairLines(diagLines []domain.DiagramLine, boxes []*domain.Box) ([]string,
 			result[dl.Index] = dl.Original
 		}
 	}
+
+	// Snap lone ▼/▲ connectors to align with ┬/┴ in the preceding line.
+	for i := 1; i < len(result); i++ {
+		result[i] = snapConnectorToTee(result[i], result[i-1])
+	}
+
 	return result, nil
 }
 
@@ -395,7 +401,20 @@ func repairContentLine(dl domain.DiagramLine) string {
 			content := extractBetweenCols(dl.Original, leftActual+1, rightActual)
 			content = strings.TrimRight(content, " ")
 
-			padded := []rune(VisualPad(content, segWidth))
+			var padded []rune
+			// Extend connector dashes up to the wall gap rather than padding with spaces.
+			if strings.HasSuffix(content, "─") && StringWidth(content) < segWidth {
+				cr := []rune(content)
+				for StringWidth(string(cr)) < segWidth-1 {
+					cr = append(cr, '─')
+				}
+				if StringWidth(string(cr)) < segWidth {
+					cr = append(cr, ' ')
+				}
+				padded = cr
+			} else {
+				padded = []rune(VisualPad(content, segWidth))
+			}
 			for j, r := range padded {
 				pos := leftTarget + 1 + j
 				if pos < rightTarget && pos < targetWidth {
@@ -404,31 +423,31 @@ func repairContentLine(dl domain.DiagramLine) string {
 			}
 		}
 	} else {
-		if len(pipeCols) >= 2 {
-			// Actual │ count differs from expected box-wall count (e.g. extra
-			// connector │ inside the box, or shifted walls).  Map the last two
-			// expected pipe positions to the closest actual pipe positions so we
-			// extract content from the right region, not from the whole span.
-			innerLeft := pipeCols[len(pipeCols)-2]
-			innerRight := pipeCols[len(pipeCols)-1]
-			segWidth := innerRight - innerLeft - 1
-			if segWidth > 0 {
-				actLeft := closestPipe(actualPipes, innerLeft)
-				actRight := closestPipe(actualPipes, innerRight)
-				if actLeft >= 0 && actRight > actLeft {
-					content := extractBetweenCols(dl.Original, actLeft+1, actRight)
-					content = strings.TrimRight(content, " ")
-					padded := []rune(VisualPad(content, segWidth))
-					for j, r := range padded {
-						pos := innerLeft + 1 + j
-						if pos < innerRight && pos < targetWidth {
-							buf[pos] = r
-						}
-					}
+		// Actual │ count differs from expected box-wall count (e.g. extra
+		// connector │ inside the box, or shifted walls).  Process all segments
+		// using closestPipe to map each expected boundary to the nearest actual
+		// pipe, preserving content in every segment including free-form connectors.
+		for seg := 0; seg < len(pipeCols)-1; seg++ {
+			leftTarget := pipeCols[seg]
+			rightTarget := pipeCols[seg+1]
+			segWidth := rightTarget - leftTarget - 1
+			if segWidth <= 0 {
+				continue
+			}
+			actLeft := closestPipe(actualPipes, leftTarget)
+			actRight := closestPipe(actualPipes, rightTarget)
+			if actLeft < 0 || actRight <= actLeft {
+				continue
+			}
+			content := extractBetweenCols(dl.Original, actLeft+1, actRight)
+			content = strings.TrimRight(content, " ")
+			padded := []rune(VisualPad(content, segWidth))
+			for j, r := range padded {
+				pos := leftTarget + 1 + j
+				if pos < rightTarget && pos < targetWidth {
+					buf[pos] = r
 				}
 			}
-		} else {
-			return dl.Original
 		}
 	}
 
@@ -487,6 +506,47 @@ func absInt(x int) int {
 		return -x
 	}
 	return x
+}
+
+// snapConnectorToTee repositions a lone ▼ (or ▲) in connLine to the column of ┬ (or
+// ┴) found in teeLine, if such a tee exists and differs from the connector's current
+// position.
+func snapConnectorToTee(connLine, teeLine string) string {
+	// Find ▼/▲ position
+	connCol := -1
+	connRune := rune(0)
+	col := 0
+	for _, r := range connLine {
+		if r == '▼' || r == '▲' {
+			connCol = col
+			connRune = r
+			break
+		}
+		col += RuneWidthOf(r)
+	}
+	if connCol < 0 {
+		return connLine
+	}
+	// Find ┬/┴ position in teeLine
+	teeCol := -1
+	col = 0
+	for _, r := range teeLine {
+		if r == '┬' || r == '┴' {
+			teeCol = col
+			break
+		}
+		col += RuneWidthOf(r)
+	}
+	if teeCol < 0 || teeCol == connCol {
+		return connLine
+	}
+	buf := []rune(connLine)
+	if teeCol >= len(buf) || connCol >= len(buf) {
+		return connLine
+	}
+	buf[connCol] = ' '
+	buf[teeCol] = connRune
+	return string(buf)
 }
 
 // findActualPipes returns the visual column positions of all │ chars in a line.
