@@ -51,8 +51,18 @@ func RepairFile(input []byte, opts Options) ([]byte, Result, error) {
 			continue
 		}
 
-		// Safety check: repair must never alter text content, only structural
-		// characters (box-drawing chars and spaces).
+		// Per-line safety: if repair would alter a line's text content, revert
+		// that line to the original.  This allows the rest of the block to be
+		// repaired even when individual lines cannot be safely reformatted.
+		for j := range repairedLines {
+			if j < len(lines) {
+				if infrastructure.TextContent([]string{lines[j]}) != infrastructure.TextContent([]string{repairedLines[j]}) {
+					repairedLines[j] = lines[j]
+				}
+			}
+		}
+
+		// Block-level safety check: should always pass after per-line safety.
 		if infrastructure.TextContent(lines) != infrastructure.TextContent(repairedLines) {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("diagram %d: repair aborted, text content would be altered", result.DiagramsFound))
 			result.DiagramsOK++

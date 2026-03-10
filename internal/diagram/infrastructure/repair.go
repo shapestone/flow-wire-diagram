@@ -118,8 +118,130 @@ func repairFreeLine(original, prevRepaired string) string {
 // RepairLines widens the outermost box's RightCol to fit and then
 // retroactively re-renders every line from the box's top frame down to
 // (and including) the current line before continuing.
+// widenInnerBoxesFromTopFrames adjusts the RightCol of the rightmost inner
+// box on each top-frame line, but only when that box has content that actually
+// overflows its current width.  The widening preserves the trailing gap seen
+// in the original line between the inner box's ┐ and the outer │.
+func widenInnerBoxesFromTopFrames(diagLines []domain.DiagramLine) {
+	for _, dl := range diagLines {
+		if dl.Role != domain.RoleTopFrame || len(dl.ActiveBoxes) == 0 || countRootBoxes(dl) != 1 {
+			continue
+		}
+		outermost := dl.ActiveBoxes[0]
+
+		// Find the rightmost inner box that owns this top frame line.
+		var rightmostOwn *domain.Box
+		for _, b := range dl.ActiveBoxes {
+			if b == outermost || dl.Index != b.TopLine {
+				continue
+			}
+			if rightmostOwn == nil || b.RightCol > rightmostOwn.RightCol {
+				rightmostOwn = b
+			}
+		}
+		if rightmostOwn == nil {
+			continue
+		}
+
+		// Only apply widening when the inner box has content that overflows
+		// its current segment width.  Without overflow, the existing repair
+		// logic already produces correct output and no widening is needed.
+		innerSegWidth := rightmostOwn.RightCol - rightmostOwn.LeftCol - 1
+		hasOverflow := false
+		for _, cdl := range diagLines {
+			if cdl.Role != domain.RoleContent {
+				continue
+			}
+			if cdl.Index <= rightmostOwn.TopLine || cdl.Index >= rightmostOwn.BottomLine {
+				continue
+			}
+			actualPipes := findActualPipes(cdl.Original)
+			actLeft := closestPipe(actualPipes, rightmostOwn.LeftCol)
+			actRight := closestPipe(actualPipes, rightmostOwn.RightCol)
+			if actLeft < 0 || actRight <= actLeft {
+				continue
+			}
+			content := extractBetweenCols(cdl.Original, actLeft+1, actRight)
+			content = strings.TrimRight(content, " ")
+			if StringWidth(content) > innerSegWidth {
+				hasOverflow = true
+				break
+			}
+		}
+		if !hasOverflow {
+			continue
+		}
+
+		// Scan the original top-frame line for the rightmost ┐ and the
+		// rightmost │ (the displaced outer wall).
+		origInnerRight := -1
+		origOuterCol := -1
+		col := 0
+		for _, r := range dl.Original {
+			if r == '┐' {
+				origInnerRight = col
+			} else if r == '│' {
+				origOuterCol = col
+			}
+			col += RuneWidthOf(r)
+		}
+
+		if origInnerRight < 0 || origOuterCol < 0 || origOuterCol <= origInnerRight {
+			continue
+		}
+
+		// Widen the inner box by the outer wall's displacement, which
+		// preserves the original trailing gap at the target outer position.
+		trailingGap := origOuterCol - origInnerRight - 1
+		newInnerRight := outermost.RightCol - trailingGap - 1
+		if newInnerRight > rightmostOwn.RightCol {
+			rightmostOwn.RightCol = newInnerRight
+			rightmostOwn.Width = newInnerRight - rightmostOwn.LeftCol + 1
+		}
+	}
+}
+
+// widenRootBoxes widens free-standing (root) boxes when their content lines
+// overflow the current frame width.  This pre-processing pass runs before
+// frame / content repair so that the correct (widened) RightCol is used
+// when rendering each box.
+func widenRootBoxes(diagLines []domain.DiagramLine) {
+	for _, dl := range diagLines {
+		if dl.Role != domain.RoleContent {
+			continue
+		}
+		// Single-root widening is handled by the main repair loop; only
+		// multi-root lines need pre-processing here.
+		if countRootBoxes(dl) <= 1 {
+			continue
+		}
+		actualPipes := findActualPipes(dl.Original)
+		for _, b := range dl.ActiveBoxes {
+			if b.Parent != nil {
+				continue
+			}
+			actLeft := closestPipe(actualPipes, b.LeftCol)
+			actRight := closestPipe(actualPipes, b.RightCol)
+			if actLeft < 0 || actRight <= actLeft {
+				continue
+			}
+			// If the actual right │ sits beyond the frame's ┐, the content
+			// overflows the current box width — widen to match.
+			if actRight > b.RightCol {
+				b.RightCol = actRight
+				b.Width = actRight - b.LeftCol + 1
+			}
+		}
+	}
+}
+
 func RepairLines(diagLines []domain.DiagramLine, boxes []*domain.Box) ([]string, error) {
 	result := make([]string, len(diagLines))
+
+	// Widen root boxes and inner boxes before the main loop so that all
+	// subsequent frame and content repairs see the correct (widened) dimensions.
+	widenRootBoxes(diagLines)
+	widenInnerBoxesFromTopFrames(diagLines)
 
 	// Index all diagram lines so we can look them up by line number when
 	// retroactively re-rendering after a box is widened.
@@ -236,13 +358,84 @@ func countRootBoxes(dl domain.DiagramLine) int {
 	return n
 }
 
+// repairMultiRootFrameLine renders each root box's own frame corners and
+// dashes independently, leaving the gaps between boxes untouched.
+func repairMultiRootFrameLine(dl domain.DiagramLine) string {
+	buf := []rune(dl.Original)
+	for _, b := range dl.ActiveBoxes {
+		if b.Parent != nil {
+			continue
+		}
+		isOwnFrame := (dl.Role == domain.RoleTopFrame && dl.Index == b.TopLine) ||
+			(dl.Role == domain.RoleBottomFrame && dl.Index == b.BottomLine)
+		if !isOwnFrame {
+			continue
+		}
+		for len(buf) <= b.RightCol {
+			buf = append(buf, ' ')
+		}
+		if dl.Role == domain.RoleTopFrame {
+			buf[b.LeftCol] = '┌'
+			buf[b.RightCol] = '┐'
+		} else {
+			buf[b.LeftCol] = '└'
+			buf[b.RightCol] = '┘'
+		}
+		for c := b.LeftCol + 1; c < b.RightCol; c++ {
+			buf[c] = '─'
+		}
+	}
+	return strings.TrimRight(string(buf), " ")
+}
+
+// repairMultiRootContentLine repairs each root box's content segment
+// independently, preserving the gaps between sibling boxes.
+func repairMultiRootContentLine(dl domain.DiagramLine) string {
+	buf := []rune(dl.Original)
+	actualPipes := findActualPipes(dl.Original)
+	for _, b := range dl.ActiveBoxes {
+		if b.Parent != nil {
+			continue
+		}
+		actLeft := closestPipe(actualPipes, b.LeftCol)
+		actRight := closestPipe(actualPipes, b.RightCol)
+		if actLeft < 0 || actRight <= actLeft {
+			continue
+		}
+		for len(buf) <= b.RightCol {
+			buf = append(buf, ' ')
+		}
+		// Place walls at correct columns.
+		if actLeft < len(buf) {
+			buf[actLeft] = ' '
+		}
+		buf[b.LeftCol] = '│'
+		if actRight < len(buf) {
+			buf[actRight] = ' '
+		}
+		buf[b.RightCol] = '│'
+		// Fill content between walls.
+		segWidth := b.RightCol - b.LeftCol - 1
+		content := extractBetweenCols(dl.Original, actLeft+1, actRight)
+		content = strings.TrimRight(content, " ")
+		padded := []rune(VisualPad(content, segWidth))
+		for j, r := range padded {
+			pos := b.LeftCol + 1 + j
+			if pos < b.RightCol && pos < len(buf) {
+				buf[pos] = r
+			}
+		}
+	}
+	return strings.TrimRight(string(buf), " ")
+}
+
 // repairFrameLine fixes a top (┌─┐) or bottom (└─┘) frame line.
 func repairFrameLine(dl domain.DiagramLine) string {
 	if len(dl.ActiveBoxes) == 0 {
 		return dl.Original
 	}
 	if countRootBoxes(dl) > 1 {
-		return dl.Original
+		return repairMultiRootFrameLine(dl)
 	}
 
 	outermost := dl.ActiveBoxes[0]
@@ -319,8 +512,16 @@ func repairFrameLine(dl domain.DiagramLine) string {
 				// as shifted walls and must not be preserved here.
 				nearBoxWall := false
 				for _, b := range dl.ActiveBoxes {
+					// The outermost right wall may be displaced by more columns
+					// than connectorAlignWindow; use a wider window so that a
+					// shifted outer wall is not mistakenly preserved as a free
+					// connector in the trailing gap.
+					rightWindow := connectorAlignWindow
+					if b == outermost {
+						rightWindow = 4
+					}
 					if absInt(col-b.LeftCol) <= connectorAlignWindow ||
-						absInt(col-b.RightCol) <= connectorAlignWindow {
+						absInt(col-b.RightCol) <= rightWindow {
 						nearBoxWall = true
 						break
 					}
@@ -355,7 +556,7 @@ func repairContentLine(dl domain.DiagramLine) string {
 		return dl.Original
 	}
 	if countRootBoxes(dl) > 1 {
-		return dl.Original
+		return repairMultiRootContentLine(dl)
 	}
 
 	outermost := dl.ActiveBoxes[0]
@@ -510,21 +711,24 @@ func absInt(x int) int {
 
 // snapConnectorToTee repositions a lone ▼ (or ▲) in connLine to the column of ┬ (or
 // ┴) found in teeLine, if such a tee exists and differs from the connector's current
-// position.
+// position.  Lines with multiple ▼/▲ symbols (branch splits) are left unchanged.
 func snapConnectorToTee(connLine, teeLine string) string {
-	// Find ▼/▲ position
+	// Count ▼/▲; only snap lone connectors.
+	count := 0
 	connCol := -1
 	connRune := rune(0)
 	col := 0
 	for _, r := range connLine {
 		if r == '▼' || r == '▲' {
-			connCol = col
-			connRune = r
-			break
+			count++
+			if count == 1 {
+				connCol = col
+				connRune = r
+			}
 		}
 		col += RuneWidthOf(r)
 	}
-	if connCol < 0 {
+	if count != 1 || connCol < 0 {
 		return connLine
 	}
 	// Find ┬/┴ position in teeLine

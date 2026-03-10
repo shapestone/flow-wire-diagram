@@ -102,14 +102,24 @@ func matchFrames(frames []domain.BoxFrame) []*domain.Box {
 	for _, top := range tops {
 		bestLine := -1
 		bestIdx := -1
+		bestRightCol := top.RightCol
 		for idx, bot := range bottoms {
 			if usedBottom[idx] {
 				continue
 			}
-			if bot.LeftCol == top.LeftCol && bot.RightCol == top.RightCol && bot.Line > top.Line {
+			rightDiff := bot.RightCol - top.RightCol
+			if rightDiff < 0 {
+				rightDiff = -rightDiff
+			}
+			if bot.LeftCol == top.LeftCol && rightDiff <= 1 && bot.Line > top.Line {
 				if bestLine == -1 || bot.Line < bestLine {
 					bestLine = bot.Line
 					bestIdx = idx
+					if bot.RightCol > top.RightCol {
+						bestRightCol = bot.RightCol
+					} else {
+						bestRightCol = top.RightCol
+					}
 				}
 			}
 		}
@@ -120,8 +130,8 @@ func matchFrames(frames []domain.BoxFrame) []*domain.Box {
 				TopLine:    top.Line,
 				BottomLine: bot.Line,
 				LeftCol:    top.LeftCol,
-				RightCol:   top.RightCol,
-				Width:      top.RightCol - top.LeftCol + 1,
+				RightCol:   bestRightCol,
+				Width:      bestRightCol - top.LeftCol + 1,
 			})
 		}
 	}
